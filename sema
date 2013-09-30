@@ -1,0 +1,59 @@
+#!/usr/bin/ruby
+require 'rubygems'
+require 'rest-client'
+require 'thor'
+require 'yaml'
+require 'yaml/store'
+
+class Sema < Thor
+  package_name "Sema"
+  map "-c" => :config
+  map "-s" => :sms
+  map "-r" => :record
+
+  desc "config", "Configure API Details. Usage: sema config <api_key> <from>"
+  def config(api_key, from)
+    store_yaml("api_key", api_key)
+    store_yaml("from", from)
+  end
+
+  desc "record", "Store numbers in a directory. Usage: sema record <name> <number>"
+  def record(name, number)
+    store_yaml(name, number)
+  end
+
+  desc "sms", "Send SMS. Usage: sema sms <number> <message> or sema sms <name> <message>"
+  def sms(param, message)
+    attrs = read_yaml
+
+    num = if not_num? param
+      attrs[param]
+    else
+      param
+    end
+
+    hash ={ :api => attrs['api_key'], :message => message, :number => num, :from => attrs['from']}
+
+    response = RestClient.post "http://api.semaphore.co/api/sms", hash
+    puts response
+  end
+
+private
+  def read_yaml
+    YAML.load_file("./config.store") rescue puts "No config file. Run sema -c <api_key> <from>"
+  end
+
+  def store_yaml(key, value)
+    store = YAML::Store.new "config.store"
+
+    store.transaction do
+      store[key] = value
+    end
+  end
+
+  def not_num? number
+    number.to_i.to_s != number
+  end
+end
+
+Sema.start
